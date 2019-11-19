@@ -1,0 +1,12 @@
+---
+# tasks file for timezone/
+#
+ 
+- hosts: all
+    remote_user: vagrant
+      become: yes
+        tasks:
+                    - name: Ajustando Timezone
+                            timezone:
+                                            name: America/Sao_Paulo
+

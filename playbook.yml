@@ -1,0 +1,125 @@
+- hosts: controller
+  remote_user: vagrant
+  become: yes
+  tasks:
+    - name: Criando o Arquivo Info
+      lineinfile:
+        path: /tmp/info
+        create: yes
+        line: SERVIDOR ANSIBLE CONTROLLER
+        state: present
+        #regexp: '^SELINUX='
+        #line: SELINUX=enforcing
+
+- hosts: db
+  remote_user: vagrant
+  become: yes
+  tasks:
+    - name: Criando o Arquivo Info
+      lineinfile:
+        path: /tmp/info
+        create: yes
+        line: SERVIDOR DE BANCO DE DADOS MYSQL
+        state: present
+    - name: Definindo a Senha de Administrador do MySQL
+      debconf: name='mysql-server' question='mysql-server/root_password' value='123' vtype='password'
+
+    - name: Confirmando a Senha de Administrador do MySQL
+      debconf: name='mysql-server' question='mysql-server/root_password_again' value='123' vtype='password'
+    
+    - name: Instalando MYSQL
+      apt:
+        state: present
+        update_cache: yes
+        pkg: 
+          - mysql-server
+          - python-pymysql
+
+    - name: Criando a Base de Dados
+      mysql_db:
+        name: glpi
+        state: present
+        login_user: root
+        login_password: 123
+
+    - name: Criando o usuário do Banco
+      mysql_user:
+        name: glpi
+        password: impacta
+        priv: '*.*:ALL'
+        state: present
+        host: 172.17.177.22
+        login_user: root
+        login_password: 123
+    - name: 
+      lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: '^bind-address'
+        line: bind-address =  0.0.0.0
+      notify:
+          - restart mysql
+  handlers:
+    - name: restart mysql
+      service:
+        name: mysql
+        state: restarted  
+- hosts: web
+  remote_user: vagrant
+  become: yes
+  tasks:
+    - name: Criando o Arquivo Info
+      lineinfile:
+        path: /tmp/info
+        create: yes
+        line: SERVIDOR DO BLOG GLPI
+        state: present
+    - name: Instalando Apache
+      apt:
+        state: present
+        update_cache: yes
+        pkg: 
+          - apache2
+          - php-curl
+          - php-gd
+          - php-mbstring
+          - php-xml
+          - php-xmlrpc
+          - php-soap
+          - php-intl
+          - php-zip
+          - php
+          - libapache2-mod-php
+          - php-mysql
+          - mysql-client
+          - php-ldap
+    - name: Download WordPress
+      get_url:
+        url=https://github.com/glpi-project/glpi/releases/download/9.4.4/glpi-9.4.4.tgz
+        dest=/tmp/glpi.tar.gz
+        validate_certs=no     
+    - name: Desempacotando o TAR do GLPI
+      unarchive:
+        src: /tmp/glpi.tar.gz
+        dest: /var/www/
+        owner: www-data
+        group: www-data
+        copy: no
+    - name: Configurando o Apache
+      lineinfile:
+        dest=/etc/apache2/sites-enabled/000-default.conf
+        regexp="(.)+DocumentRoot /var/www/html"
+        line="DocumentRoot /var/www/glpi"
+      notify:
+        - restart apache
+    - name: Configurando o GLPI (Banco de Dados)
+      template:
+        src: /vagrant/wp-config.j2
+        dest: /var/www/wordpress
+        owner: www-data
+        group: www-data
+        mode: '0644'
+  handlers:
+    - name: restart apache
+      service:
+        name: apache2
+        state: restarted
